@@ -131,15 +131,22 @@ export function attachHoverList(btn: HTMLElement, spec: PopSpec, filter?: Filter
     const content = h('div', { class: 'dp-detail-content' },
       h('div', { class: 'dp-meta' }, h('b', {}, d.author), h('span', {}, ago(d.ts, d.time))),
       dynCard(d, true));
-    // 正文单击保留阅读，按钮和图片沿用原卡片交互。
+    for (const link of content.querySelectorAll<HTMLAnchorElement>('.dy-pics a')) {
+      const card = link.closest<HTMLElement>('.dy');
+      link.href = card?.dataset.href || d.url;
+      link.setAttribute('aria-label', '打开动态详情');
+    }
+    // 媒体链接直接跳转，拦截原卡片的图片查看器；正文单击保留阅读。
     content.addEventListener('click', (e) => {
       const target = e.target as Element;
-      if (target.closest('button, .dy-pics a') || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      if (target.closest('button')) return;
+      if (target.closest('.dy-pics a, .dy-video')) { e.stopPropagation(); return; }
+      if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
       e.preventDefault();
       e.stopPropagation();
     }, true);
     content.addEventListener('dblclick', (e) => {
-      if ((e.target as Element).closest('button, .dy-pics a')) return;
+      if ((e.target as Element).closest('button, a')) return;
       e.preventDefault();
       e.stopPropagation();
       window.open(d.url, '_blank', 'noopener,noreferrer');
