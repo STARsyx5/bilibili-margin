@@ -117,6 +117,8 @@ export interface Settings {
   wide: boolean;
   /** 播放器独立圆角，关闭时不影响页面卡片 */
   playerCorners: boolean;
+  /** 连播方式扩展：按合集/分P/番剧/推荐分别控制连播，并隐藏官方「播放方式」 */
+  autoplayExt: boolean;
   /** 隐藏广告与推广（v0.47），默认开启；只做展示层过滤 */
   hideAds: boolean;
   /** 社区广告片段自动跳过，默认关闭；只读小电视空降助手数据 */
@@ -202,6 +204,7 @@ export const DEFAULTS: Settings = {
   searchStyle: 'classic',
   wide: false,
   playerCorners: true,
+  autoplayExt: true,
   hideAds: true,
   sponsorSkip: false,
   danmakuJump: false,
@@ -276,6 +279,7 @@ function merge(raw: Partial<Settings> | undefined): Settings {
     searchStyle: r.searchStyle === 'new' ? 'new' : 'classic',
     wide: r.wide === true,
     playerCorners: r.playerCorners !== false,
+    autoplayExt: r.autoplayExt !== false,
     hideAds: r.hideAds !== false,
     sponsorSkip: r.sponsorSkip === true,
     privacyExternal: r.privacyExternal === true,
@@ -344,6 +348,7 @@ export function sanitizeSettings(raw: unknown): Settings | null {
   if (r.titleFont === 'serif' || r.titleFont === 'sans') out.titleFont = r.titleFont;
   if (r.cols === 0 || r.cols === 4 || r.cols === 5 || r.cols === 6) out.cols = r.cols;
   if (typeof r.playerCorners === 'boolean') out.playerCorners = r.playerCorners;
+  if (typeof r.autoplayExt === 'boolean') out.autoplayExt = r.autoplayExt;
   if (typeof r.feedFollowList === 'boolean') out.feedFollowList = r.feedFollowList;
   if (typeof r.paletteSpeed === 'number') out.paletteSpeed = clampPaletteSpeed(r.paletteSpeed);
   if (r.searchStyle === 'classic' || r.searchStyle === 'new') out.searchStyle = r.searchStyle;
