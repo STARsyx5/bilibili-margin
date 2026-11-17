@@ -1,10 +1,6 @@
 // 映间 MARGIN · 连播方式扩展（v0.61）
-// 运行在页面主环境（MAIN world），document_idle。
-//
-// 插件设置里的开关决定要不要显示功能；官方「播放方式」决定能不能接管：
-//   官方 = 自动切集 → 四个开关可用，按场景决定要不要放行播放结束后的跳转
-//   官方 = 播完暂停 → 四个开关置灰，完全不介入
-// 全程只读官方配置，一次都不写，所以关掉插件后官方行为原样保留。
+// 跑在页面主环境，只读官方「播放方式」：自动切集才接管，播完暂停则开关置灰、完全不介入。
+// 官方配置一次都不写，关掉插件后行为原样保留。
 
 type SceneKind = 'bangumi' | 'multiPage' | 'collection' | 'single';
 type PrefKey = 'bangumi' | 'multiPage' | 'collection' | 'recommend';
@@ -50,6 +46,7 @@ interface Prefs {
     on?(name: string, fn: () => void): void;
     off?(name: string, fn: () => void): void;
     setHandoff?(value: number): void;
+    getHandoff?(): number;
   }
 
   const getPlayer = (): PlayerLike | null =>
@@ -300,29 +297,55 @@ interface Prefs {
     return true;
   }
 
-  // ── 功能监听：只在启用期间运行，关闭时全部拆掉 ──
   const disposers: Array<() => void> = [];
 
   function startFunctionalWatch(): void {
     if (disposers.length) return;
 
-    // B 站把「显示结束页」和「跳下一集」写在同一个处理里，拦 DOM 的 ended
-    // 会让结束页也变成空壳。改成监听播放器自己的 Player_Ended：在它判断之前
-    // 把内存里的播放方式临时设成「播完暂停」，它就会正常显示结束页、不跳转；
-    // 配置值随即写回，内存稍后也恢复。
-    const onEnded = (): void => {
-      if (!shouldBlock()) return;
+    // 视频元素的 ended 比播放器自己的 Player_Ended 早十几毫秒：这时把内存设成
+    // 「播完暂停」，B 站会走完整暂停路径——结束页照常渲染、不跳下一集。
+    // 配置当场写回，内存等结束页出现文字再恢复（视频页约 100ms，番剧页约 800ms）。
+    let pendingEnd = false;
+    let settleTimer = 0;
+    const onEnded = (e: Event): void => {
+      if (!(e.target instanceof HTMLVideoElement) || !shouldBlock()) return;
+      if (pendingEnd) return;   // 上一次还没收尾，别叠加
       const p = getPlayer();
       if (!p?.setHandoff) return;
       try {
         p.setHandoff(2);
-        restoreOfficialMode(0);
-        window.setTimeout(() => {
-          try { p.setHandoff?.(0); } catch { /* 忽略 */ }
-        }, 150);
+      } catch {
+        return;
+      }
+      pendingEnd = true;
+      restoreOfficialMode(0);
+
+      const settle = (left: number): void => {
+        const wrap = document.querySelector('.bpx-player-ending-wrap');
+        const len = wrap ? (wrap.textContent ?? '').replace(/\s+/g, '').length : 0;
+        if (len > 0 || left <= 0) {
+          pendingEnd = false;
+          // 重新取一次：切集后播放器实例可能已经换了
+          try { getPlayer()?.setHandoff?.(0); } catch { /* 忽略 */ }
+          return;
+        }
+        settleTimer = window.setTimeout(() => settle(left - 1), 16);
+      };
+      settleTimer = window.setTimeout(() => settle(186), 0);   // 3 秒兜底
+    };
+    document.addEventListener('ended', onEnded, true);
+
+    // 切集时播放器实例复用，若上一集把内存留在 2，纠正回用户设置
+    const onMeta = (): void => {
+      if (pendingEnd) return;
+      const p = getPlayer();
+      const off = readOfficialMode();
+      if (!p?.getHandoff || !p.setHandoff || off === null) return;
+      try {
+        if (p.getHandoff() !== off) p.setHandoff(off);
       } catch { /* 忽略 */ }
     };
-    getPlayer()?.on?.('Player_Ended', onEnded);
+    document.addEventListener('loadedmetadata', onMeta, true);
 
     // 设置面板：点齿轮时才创建，等它出现再挂
     const onDocClick = (e: Event): void => {
@@ -365,7 +388,8 @@ interface Prefs {
     listMo.observe(listRoot, { childList: true, subtree: true });
 
     disposers.push(() => {
-      getPlayer()?.off?.('Player_Ended', onEnded);
+      document.removeEventListener('ended', onEnded, true);
+      document.removeEventListener('loadedmetadata', onMeta, true);
       document.removeEventListener('click', onDocClick, true);
       panelMo.disconnect();
       clearTimeout(panelTimer);
@@ -373,6 +397,9 @@ interface Prefs {
       document.removeEventListener('click', onModeChange, true);
       listMo.disconnect();
       clearTimeout(listTimer);
+      // 停用时 settle 可能还没跑完，别让它继续改播放方式
+      clearTimeout(settleTimer);
+      pendingEnd = false;
     });
   }
 
