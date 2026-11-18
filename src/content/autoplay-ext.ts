@@ -1,6 +1,6 @@
 // 映间 MARGIN · 连播方式扩展（v0.61）
-// 跑在页面主环境，只读官方「播放方式」：自动切集才接管，播完暂停则开关置灰、完全不介入。
-// 官方配置一次都不写，关掉插件后行为原样保留。
+// 跑在页面主环境：官方「播放方式」为自动切集时才接管，播完暂停则开关置灰、不介入。
+// 接管期间把播放器内存临时设为「播完暂停」，持久配置始终是用户自己的值。
 
 type SceneKind = 'bangumi' | 'multiPage' | 'collection' | 'single';
 type PrefKey = 'bangumi' | 'multiPage' | 'collection' | 'recommend';
@@ -300,33 +300,60 @@ interface Prefs {
   const disposers: Array<() => void> = [];
 
   function startFunctionalWatch(): void {
-    if (disposers.length) return;
+    if (disposers.length || !extEnabled) return;
 
-    // 视频元素的 ended 比播放器自己的 Player_Ended 早十几毫秒：这时把内存设成
+    // 视频元素的 ended 早于播放器自己的 Player_Ended：这段窗口里把内存设成
     // 「播完暂停」，B 站会走完整暂停路径——结束页照常渲染、不跳下一集。
-    // 配置当场写回，内存等结束页出现文字再恢复（视频页约 100ms，番剧页约 800ms）。
-    let pendingEnd = false;
+    // 持久配置全程保持用户的选择；接管结束或被停用时把内存恢复回去。
+    let genSeq = 0;
+    let takeover: { gen: number; baseline: number } | null = null;
     let settleTimer = 0;
-    const onEnded = (e: Event): void => {
-      if (!(e.target instanceof HTMLVideoElement) || !shouldBlock()) return;
-      if (pendingEnd) return;   // 上一次还没收尾，别叠加
+    // 用户在本轮接管期间动过播放方式设置。改值必然经过设置面板，
+    // 用它区分「用户选的 2」和「我们临时设的 2」。
+    let userTouchedMode = false;
+
+    // 只有仍持有接管的代次才能释放；用户动过设置就让位
+    const release = (mine: number): void => {
+      if (!takeover || takeover.gen !== mine) return;
+      const baseline = takeover.baseline;
+      takeover = null;
+      if (userTouchedMode) return;
       const p = getPlayer();
-      if (!p?.setHandoff) return;
+      if (!p?.getHandoff || !p.setHandoff) return;
+      try {
+        // 内存被别的东西改过就别碰；还是 2 才说明仍是我们设的
+        if (p.getHandoff() !== 2) return;
+        try { p.setHandoff(baseline); } catch { /* 忽略 */ }
+        // B 站会把内存回写进 localStorage，这里一并覆盖回去
+        restoreOfficialMode(baseline);
+      } catch { /* 忽略 */ }
+    };
+
+    const onEnded = (e: Event): void => {
+      const t = e.target;
+      if (!(t instanceof HTMLVideoElement)) return;
+      if (!t.closest('.bpx-player-container')) return;   // 只认主播放器的视频
+      if (takeover || !shouldBlock()) return;
+      const p = getPlayer();
+      const baseline = readOfficialMode();
+      if (!p?.setHandoff || baseline === null) return;
       try {
         p.setHandoff(2);
       } catch {
         return;
       }
-      pendingEnd = true;
-      restoreOfficialMode(0);
+      genSeq += 1;
+      const mine = genSeq;
+      takeover = { gen: mine, baseline };
+      userTouchedMode = false;   // 新一轮接管，重新计
+      restoreOfficialMode(baseline);
 
       const settle = (left: number): void => {
+        if (!takeover || takeover.gen !== mine) return;   // 已停用
         const wrap = document.querySelector('.bpx-player-ending-wrap');
         const len = wrap ? (wrap.textContent ?? '').replace(/\s+/g, '').length : 0;
         if (len > 0 || left <= 0) {
-          pendingEnd = false;
-          // 重新取一次：切集后播放器实例可能已经换了
-          try { getPlayer()?.setHandoff?.(0); } catch { /* 忽略 */ }
+          release(mine);
           return;
         }
         settleTimer = window.setTimeout(() => settle(left - 1), 16);
@@ -335,9 +362,9 @@ interface Prefs {
     };
     document.addEventListener('ended', onEnded, true);
 
-    // 切集时播放器实例复用，若上一集把内存留在 2，纠正回用户设置
+    // 切集时播放器实例复用，若内存里还留着 2，纠正回用户设置
     const onMeta = (): void => {
-      if (pendingEnd) return;
+      if (takeover) return;
       const p = getPlayer();
       const off = readOfficialMode();
       if (!p?.getHandoff || !p.setHandoff || off === null) return;
@@ -346,6 +373,16 @@ interface Prefs {
       } catch { /* 忽略 */ }
     };
     document.addEventListener('loadedmetadata', onMeta, true);
+
+    // 换页后播放器可能带着上一页的内存值，而 loadedmetadata 早于这里注册，
+    // onMeta 来不及纠正；启动时先对齐一次，避免这一页第一次播完不连播
+    try {
+      const p0 = getPlayer();
+      const off0 = readOfficialMode();
+      if (p0?.getHandoff && p0.setHandoff && off0 !== null && p0.getHandoff() !== off0) {
+        p0.setHandoff(off0);
+      }
+    } catch { /* 忽略 */ }
 
     // 设置面板：点齿轮时才创建，等它出现再挂
     const onDocClick = (e: Event): void => {
@@ -365,11 +402,12 @@ interface Prefs {
     });
     panelMo.observe(panelRoot, { childList: true, subtree: true });
 
-    // 官方「播放方式」变了，刷新开关灰度
+    // 官方「播放方式」变了：记下用户动过设置，并刷新开关灰度
     const onModeChange = (e: Event): void => {
       const t = e.target;
       if (!(t instanceof Element)) return;
       if (!t.closest('.bpx-player-ctrl-setting-handoff')) return;
+      userTouchedMode = true;
       window.setTimeout(() => syncSwitchUsability(), 150);
     };
     document.addEventListener('change', onModeChange, true);
@@ -397,9 +435,20 @@ interface Prefs {
       document.removeEventListener('click', onModeChange, true);
       listMo.disconnect();
       clearTimeout(listTimer);
-      // 停用时 settle 可能还没跑完，别让它继续改播放方式
+      // 停用时若仍在接管中，恢复用户自己的值；用户动过设置就不动
       clearTimeout(settleTimer);
-      pendingEnd = false;
+      if (takeover) {
+        const target = takeover.baseline;
+        const p = getPlayer();
+        takeover = null;
+        if (!userTouchedMode && p?.getHandoff && p.setHandoff) {
+          try {
+            if (p.getHandoff() !== 2) return;
+            try { p.setHandoff(target); } catch { /* 忽略 */ }
+            restoreOfficialMode(target);
+          } catch { /* 忽略 */ }
+        }
+      }
     });
   }
 
@@ -416,7 +465,12 @@ interface Prefs {
   function onExtChanged(): void {
     if (extEnabled) {
       mountSettingSwitches();
-      startFunctionalWatch();
+      // 启用时才等播放器，避免停用状态下白等
+      void (async () => {
+        if (await waitFor(hasPlayer, { timeout: 30000, interval: 200 })) {
+          startFunctionalWatch();
+        }
+      })();
     } else {
       stopFunctionalWatch();
       mountSettingSwitches();
@@ -452,12 +506,15 @@ interface Prefs {
   async function main(): Promise<void> {
     listenExtChanges();
 
+    // 停用状态下只保留配置监听，不等播放器
+    extEnabled = readExtEnabled();
+    if (!extEnabled) return;
+
     if (!await waitFor(hasPlayer)) return;
 
     // 给内容脚本一拍时间写进当前设置
     await sleep(300);
     extEnabled = readExtEnabled();
-
     if (!extEnabled) return;
 
     mountSettingSwitches();
