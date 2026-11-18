@@ -81,9 +81,23 @@ async function handleApp(m: AppMessage): Promise<unknown> {
   return { ok: false };
 }
 
-chrome.runtime.onMessage.addListener((m: FpMessage | AppMessage | SponsorMessage | HistoryMessage | WeatherLocationMessage, sender, reply) => {
-  if (!m || !['app', 'fp', 'sponsor', 'privacy', 'weather-location'].includes(m.margin)) return;
+type OpenVideoTabMessage = { margin: 'open-video-tab'; bvid: string };
+
+chrome.runtime.onMessage.addListener((m: FpMessage | AppMessage | SponsorMessage | HistoryMessage | WeatherLocationMessage | OpenVideoTabMessage, sender, reply) => {
+  if (!m || !['app', 'fp', 'sponsor', 'privacy', 'weather-location', 'open-video-tab'].includes(m.margin)) return;
   if (!trustedSender(sender, chrome.runtime.id)) { reply({ ok: false, error: '消息来源无效' }); return; }
+  if (m.margin === 'open-video-tab') {
+    if (!sender.tab || typeof m.bvid !== 'string' || !/^BV[0-9A-Za-z]{10}$/.test(m.bvid)) {
+      reply({ ok: false });
+      return;
+    }
+    chrome.tabs.create({
+      url: `https://www.bilibili.com/video/${m.bvid}`,
+      windowId: sender.tab.windowId,
+      active: false,
+    }).then(() => reply({ ok: true }), () => reply({ ok: false }));
+    return true;
+  }
   if (m.margin === 'weather-location') { serial(() => handleWeatherLocation(m)).then(reply, () => reply({ ok: false, error: '天气位置保存失败' })); return true; }
   if (m.margin === 'privacy') { serial(() => handleHistory(m)).then(reply, () => reply({ ok: false, entries: [] })); return true; }
   if (m && m.margin === 'sponsor') { getSponsorSegments(m.bvid).then((segments) => reply({ ok: true, segments }), () => reply({ ok: false })); return true; }
