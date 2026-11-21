@@ -186,6 +186,11 @@ html.margin-watch .video-pod, html.margin-watch .base-video-sections-v1, html.ma
   background: var(--m-surface) !important; border: 1px solid var(--m-line) !important; border-radius: var(--m-radius) !important;
 }
 
+/* 「接下来播放」和推荐列表共用一块读面。留出卡片悬停的负边距，不给整栏铺底或裁剪预览。 */
+html.margin-watch .right-container .recommend-list-v1 {
+  box-sizing: border-box; padding: 12px; border-radius: var(--m-radius);
+  background: var(--m-surface); box-shadow: var(--ring);
+}
 html.margin-watch .recommend-list-v1 .rec-title, html.margin-watch .next-play .rec-title {
   font: 600 16px/1 var(--m-serif) !important; letter-spacing: .04em; color: var(--m-ink) !important;
 }

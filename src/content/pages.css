@@ -74,7 +74,19 @@ html.margin-search[data-margin-glass="liquid"] .search-input-wrap[data-material=
   background: var(--ms-glass) !important; border-color: var(--ms-rim) !important;
   box-shadow: inset 0 1.5px 1px #ffffff50, inset 0 -1px 1px #00000020, var(--sh-sm) !important;
 }
+/* 和顶栏外壳共用顶光、冷色底缘；留住原生边框的几何尺寸与聚焦反馈。 */
+html.margin-search[data-margin-theme="dark"][data-margin-glass="liquid"] .search-input-wrap:where([data-material="lens"]:not(:focus-within)) {
+  border-color: transparent !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .34), inset 0 -1px 0 rgb(120 137 151 / .20), 0 3px 8px -4px rgb(5 9 19 / .4) !important;
+}
 html.margin-search .search-input-wrap:focus-within { background: var(--m-surface) !important; border-color: color-mix(in srgb, var(--m-ink) 18%, transparent) !important; }
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
+  html.margin-search[data-margin-glass] .search-input-wrap[data-material="lens"] { background: var(--m-surface) !important; backdrop-filter: none !important; }
+}
+@media (prefers-contrast: more), (forced-colors: active) {
+  html.margin-search[data-margin-glass] .search-input-wrap[data-material="lens"] { border-color: currentColor !important; box-shadow: none !important; }
+  html.margin-search .search-input-wrap:focus-within { outline: 2px solid currentColor; outline-offset: 2px; }
+}
 html.margin-search .search-input-el { flex: 1 !important; padding: 0 !important; margin: 0 !important; text-align: left !important; font: 400 14px/1 "Geist", "Margin Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif !important; color: var(--m-ink) !important; letter-spacing: 0; }
 html.margin-search .search-input-el::placeholder { color: var(--m-faint) !important; }
 html.margin-search .search-input-wrap svg, html.margin-search .search-input-wrap .search-input-icon { color: var(--m-faint) !important; width: 18px; height: 18px; }

@@ -150,7 +150,10 @@ export function createFootprintCard(): HTMLElement {
         h('div', { class: 'fp-brief-actions' }, h('div', { class: 'fp-week-wrap' }, h('span', {}, '近七天'), week), disclosure),
         h('span', { class: 'fp-status fp-brief-status', role: 'status' }, note));
     }
-    const title = !active ? '足迹从今天开始' : active === 1 && activeOf(activity[dayKey(today)]) ? '今天是你的第一个足迹日' : `近一年留下了 ${active} 天足迹`;
+    const todayKey = dayKey(today);
+    // Returning after a year is not a first visit. Count only known active days, not empty heartbeat records.
+    const firstDay = active === 1 && activeOf(activity[todayKey]) && !Object.keys(activity).some(k => k < todayKey && activeOf(activity[k]));
+    const title = !active ? '足迹从今天开始' : firstDay ? '今天是你在映间的第 1 天' : `近一年留下了 ${active} 天足迹`;
     if (headline.textContent !== title) headline.textContent = title;
     let lit = 0;
     dots.forEach((dot, i) => {

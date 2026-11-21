@@ -21,6 +21,7 @@ import { spaceArticles, spaceAudio, type SpaceContent } from '../api/space-conte
 import { publicFolders, publicFolder, folderPlayUrl, folderUrl, folderVideos, type Folder } from '../api/fav';
 import { nav } from '../api/http';
 import { favoriteActions } from './favorite-actions';
+import { ensureFolderPocket, folderPocketLayers } from './folder-pocket';
 
 type Tab = 'video' | 'dynamic' | 'coin' | 'like' | 'collections' | 'article' | 'audio' | 'favorites';
 type Layout = 'grid' | 'list';
@@ -450,11 +451,14 @@ export class SpaceApp {
 
   private folderCard(folder: Folder): HTMLElement {
     const open = () => this.openFolder(folder);
-    return h('article', { class: 'card sp-collection' },
+    ensureFolderPocket(this.list);
+    return h('article', { class: 'card sp-collection sp-favorite-folder' },
       h('button', { class: 'cover', type: 'button', 'aria-label': `打开${folder.title}`, onclick: open },
-        folder.cover ? h('img', { src: folder.cover, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : icon(ICONS.folder),
+        h('span', { class: 'sp-folder-art', 'aria-hidden': 'true' }, folder.cover
+          ? h('img', { src: folder.cover, alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' }) : icon(ICONS.folder)),
+        h('span', { class: 'gf-front', 'aria-hidden': 'true' }, ...folderPocketLayers()),
         h('span', { class: 'dur' }, `${folder.count} 个内容${folder.isPrivate ? ' · 私密' : ''}`)),
-      h('button', { class: 'title', type: 'button', onclick: open }, folder.title));
+      h('button', { class: 'title', type: 'button', title: folder.title, onclick: open }, folder.title));
   }
 
   /** 搜索命中合集时，在结果上方给一条入口：点开就是该合集的完整列表（GitHub #113） */

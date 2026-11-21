@@ -6,6 +6,12 @@ New entries are grouped under Added, Changed, and Fixed, following [Keep a Chang
 
 ## Unreleased
 
+### Changed
+
+- On search results, the page's native query field is the only full search box. The header now has a compact Commands button. Clicking it or pressing `Ctrl K` / `⌘ K` or `/` opens the palette without replacing the current query.
+- Liquid-glass navigation uses a directional rim instead of an even white outline in dark mode. Favorite folders refract their covers only along the pocket lip; labels, palette results and player-sidebar text sit on stable surfaces. Soft glass remains the default.
+- The seven-day footprint summary welcomes users on their first recorded active day without treating a returning user with older records as new.
+
 ## [v0.6.86](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.86) · 2026-11-22 · Compact footprints and glass corners
 
 Display version 0.6.86, browser update version 0.60.86.

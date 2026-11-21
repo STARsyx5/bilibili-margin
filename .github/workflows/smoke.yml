@@ -40,6 +40,10 @@ jobs:
           node tests/dynamic-inline-comments.mjs
           node tests/dynamic-inline-reply.mjs
           node tests/dynamic-composer-extension.mjs
+      - name: Folder pocket optics and cover-independent labels
+        run: node tests/folder-pocket.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/folder-pocket
       - name: Card actions, enable switch, private space and update controls
         run: node tests/reported-20261118.mjs
         env:
@@ -157,6 +161,8 @@ jobs:
       - name: Transparent header over high-contrast backgrounds
         run: |
           npm run test:header-surface
+          SMOKE_OUT=smoke-artifacts/header-material node tests/header-material.mjs
+          SMOKE_OUT=smoke-artifacts/native-search-material node tests/native-search-material.mjs
           SMOKE_OUT=smoke-artifacts/native-header node tests/native-header.mjs
         env:
           SMOKE_OUT: smoke-artifacts/header-surface

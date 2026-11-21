@@ -89,5 +89,14 @@ try {
     await page.screenshot({path:join(out,'short-visits.png')});
     console.log(JSON.stringify({elapsedSeconds:Math.round((Date.now()-started)/1000),recordedSeconds:data[today].s}));
   });
+  await check('only a genuine first active day gets the welcome headline', async () => {
+    await card.getByRole('button',{name:'收起足迹'}).click();
+    assert.equal(await card.locator('.fp-brief-title').innerText(), '今天是你在映间的第 1 天');
+    await worker.evaluate(async old => {
+      const key = 'margin:activity', data = (await chrome.storage.local.get(key))[key];
+      await chrome.storage.local.set({ [key]: { ...data, [old]: {s:600} } });
+    }, day(-370));
+    await page.waitForFunction(() => document.querySelector('#margin-root').shadowRoot.querySelector('.fp-brief-title')?.textContent === '近一年留下了 1 天足迹', null, {timeout:4000});
+  });
   assert.deepEqual(errors,[]);
 } finally { writeFileSync(join(out,'results.json'),JSON.stringify({results,errors},null,2));await ctx.close(); }
