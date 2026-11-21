@@ -23,7 +23,7 @@ const R = "document.getElementById('margin-root')?.shadowRoot";
 const PAGES = [
   ['home', 'https://www.bilibili.com/', `(() => { const r = ${R}; if (!r) return ['#margin-root'];
     const miss = []; if (r.querySelectorAll('.grid .card').length < 4) miss.push('.grid .card ×4');
-    for (const s of ['header', '.fp-card .fp-cells', '.hero-search, .hs', '.dash']) if (!r.querySelector(s)) miss.push(s);
+    for (const s of ['header', '.fp-card :is(.fp-cells, .fp-week)', '.hero-search, .hs', '.dash']) if (!r.querySelector(s)) miss.push(s);
     // 发布时间的绝对时间要单独一行显示
     const dates = [...r.querySelectorAll('.grid .card .pubtime')].map((e) => e.textContent.trim())
       .filter((t) => t.length === 19 && t[4] === '-' && t[10] === ' ' && t[13] === ':' && t[16] === ':');
@@ -1595,6 +1595,10 @@ for (const theme of THEMES) {
         await chrome.storage.local.set({ 'margin:activity': a, 'margin:activity-bf': Date.now() });
       });
       await page.goto('https://www.bilibili.com/', { waitUntil: 'domcontentloaded' });
+      const foot = page.locator('#margin-root .fp-card');
+      await foot.locator(':is(.fp-week,.fp-cells)').first().waitFor();
+      const expand = foot.getByRole('button', { name: '展开全年' });
+      if (await expand.isVisible()) await expand.click();
       await page.waitForFunction(() => document.getElementById('margin-root')?.shadowRoot?.querySelector('.fp-cells .fp-cell'), null, { timeout: 15000 });
       await sleep(800);
       miss = await page.evaluate(() => {

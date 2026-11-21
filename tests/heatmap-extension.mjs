@@ -25,6 +25,34 @@ try {
   const page = await ctx.newPage(); page.on('pageerror', e => errors.push(e.message));
   await page.goto('https://www.bilibili.com/');
   const card = page.locator('#margin-root .fp-card'), cell = key => card.locator(`.fp-cells [data-k="${key}"]`);
+  await check('sparse histories show a real seven-day strip and remember keyboard expansion', async () => {
+    const expand = card.getByRole('button', { name: '展开全年' });
+    await expand.waitFor({timeout:4000});
+    const dots = card.locator('.fp-week [data-k]');
+    assert.deepEqual(await dots.evaluateAll(nodes => nodes.map(n => n.dataset.k)), Array.from({length:7}, (_,i) => day(i-6)));
+    assert.equal(await card.locator(`.fp-week [data-k="${older}"]`).getAttribute('data-l'), '1');
+    assert.equal(await card.locator('.fp-cells').count(), 0);
+    await card.screenshot({path:join(out,'compact-card.png')});
+    const compactHeight = (await card.boundingBox()).height;
+    const first = page.locator('#margin-root .grid .card').first();
+    await first.waitFor(); const compactFeedY = (await first.boundingBox()).y;
+    await expand.focus(); await page.keyboard.press('Enter');
+    await card.locator('.fp-graph').waitFor();
+    const fullHeight = (await card.boundingBox()).height, fullFeedY = (await first.boundingBox()).y;
+    console.log({compactHeight, fullHeight, compactFeedY, fullFeedY});
+    assert.ok(fullHeight > compactHeight && fullFeedY > compactFeedY);
+    assert.equal(await card.getByRole('button',{name:'收起足迹'}).evaluate(b=>b.matches(':focus')), true);
+    await page.reload(); await card.locator('.fp-graph').waitFor();
+    await card.getByRole('button',{name:'月',exact:true}).click();
+    await page.reload(); await card.locator('.fp-strip').waitFor();
+    await card.getByRole('button',{name:'收起足迹'}).click(); await expand.waitFor();
+    // With no explicit preference, real backfilled days switch to the full view.
+    const saved = await worker.evaluate(async () => (await chrome.storage.local.get('margin:activity'))['margin:activity']);
+    await worker.evaluate(({saved,extra}) => chrome.storage.local.set({'margin:activity':{...saved,...extra}}), {saved,extra:{[day(-8)]:{s:900},[day(-9)]:{h:600}}});
+    await card.locator('.fp-graph').waitFor();
+    await worker.evaluate(saved => chrome.storage.local.set({'margin:activity':saved}),saved);
+    await expand.waitFor(); await expand.click();
+  });
   await check('legacy records survive a newer heartbeat key', async () => {
     await page.waitForFunction(key => document.getElementById('margin-root')?.shadowRoot?.querySelector(`.fp-cells [data-k="${key}"]`)?.dataset.l === '1', older);
     const data = await worker.evaluate(async () => (await chrome.storage.local.get('margin:activity'))['margin:activity']);

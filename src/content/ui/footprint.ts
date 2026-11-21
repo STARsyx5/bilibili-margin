@@ -14,6 +14,7 @@ const fmt = (sec: number) => {
 };
 
 const VIEW_KEY = 'margin:fp-view';
+const COMPACT_MAX_DAYS = 2;
 const MONTH_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const WEEK_1 = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -121,13 +122,47 @@ export function createFootprintCard(): HTMLElement {
   }
   let ro: ResizeObserver | null = null;
   // 21st「Glass Calendar」：年 / 月两种视图，月视图是一条可横向滑动的日期条，点哪天看哪天
-  let view: 'year' | 'month' = (() => { try { return localStorage.getItem(VIEW_KEY) === 'month' ? 'month' : 'year'; } catch { return 'year'; } })();
+  const savedView = (() => { try { return localStorage.getItem(VIEW_KEY); } catch { return null; } })();
+  let explicitView = savedView === 'year' || savedView === 'month';
+  let view: 'year' | 'month' = savedView === 'month' ? 'month' : 'year';
   let monthAt = new Date(); monthAt.setDate(1); monthAt.setHours(0, 0, 0, 0);
   let picked: string | null = null, renderedPicked: string | null = null;
   let activity: Activity = {};
   let renderedKey = '', renderedCells: HTMLElement[] = [];
   let thr: [number, number, number] = [900, 2700, 5400];
   const lv = (rec: DayRecord | undefined) => String(levelOf(secondsOf(rec), thr));
+
+  // Reuse the existing explicit year/month preference; auto mode needs no storage key.
+  const disclosure = h('button', { type: 'button', class: 'fp-disclosure', onclick: () => {
+    explicitView = el.dataset.view === 'compact'; view = 'year'; picked = null;
+    try { if (explicitView) localStorage.setItem(VIEW_KEY, 'year'); else localStorage.removeItem(VIEW_KEY); } catch { /* session only */ }
+    paint(activity); disclosure.focus({ preventScroll: true });
+  } });
+  const headline = h('h3', { class: 'fp-brief-title' });
+  const week = h('div', { class: 'fp-week', role: 'img' });
+  const dots = Array.from({ length: 7 }, () => h('i', { class: 'fp-cell', 'aria-hidden': 'true' }));
+  week.append(...dots);
+  function compact(today: Date, active: number) {
+    if (el.dataset.view !== 'compact') {
+      ro?.disconnect(); renderedKey = ''; renderedCells = [];
+      el.dataset.view = 'compact'; disclosure.hidden = false; disclosure.textContent = '展开全年'; disclosure.setAttribute('aria-expanded','false');
+      el.replaceChildren(h('div', { class: 'fp-brief-copy' }, h('div', { class: 'eyebrow' }, h('span', { class: 'en' }, 'Footprint'), '足迹'), headline),
+        h('div', { class: 'fp-brief-actions' }, h('div', { class: 'fp-week-wrap' }, h('span', {}, '近七天'), week), disclosure),
+        h('span', { class: 'fp-status fp-brief-status', role: 'status' }, note));
+    }
+    const title = !active ? '足迹从今天开始' : active === 1 && activeOf(activity[dayKey(today)]) ? '今天是你的第一个足迹日' : `近一年留下了 ${active} 天足迹`;
+    if (headline.textContent !== title) headline.textContent = title;
+    let lit = 0;
+    dots.forEach((dot, i) => {
+      const d = new Date(today); d.setDate(d.getDate() - 6 + i);
+      const k = dayKey(d), rec = activity[k], level = lv(rec);
+      if (level !== '0') lit++;
+      if (dot.dataset.k !== k) dot.dataset.k = k;
+      if (dot.dataset.l !== level) dot.dataset.l = level;
+      dot.title = `${d.getMonth()+1}月${d.getDate()}日 · ${level === '0' ? '未点亮' : fmt(secondsOf(rec))}`;
+    });
+    week.setAttribute('aria-label', `最近七天有 ${lit} 天点亮，最右为今天`);
+  }
 
   function paint(data: Activity) {
     activity = data;
@@ -145,7 +180,12 @@ export function createFootprintCard(): HTMLElement {
     const n = Math.round((+today - +start) / 864e5) + 1 + (6 - today.getDay());
     // 分档阈值跟着自己近一年的分布走（活跃日不到 14 天时用 15 / 45 / 90 分钟）
     const yearAgo = dayKey(new Date(+today - 364 * 864e5)), todayK = dayKey(today);
-    thr = levelThresholds(Object.keys(data).filter((k) => k >= yearAgo && k <= todayK).map((k) => secondsOf(data[k])));
+    const windowKeys = Object.keys(data).filter(k => k >= yearAgo && k <= todayK);
+    thr = levelThresholds(windowKeys.map(k => secondsOf(data[k])));
+    const activeDays = windowKeys.filter(k => activeOf(data[k])).length;
+    if (!explicitView && activeDays <= COMPACT_MAX_DAYS) { compact(today, activeDays); return; }
+    disclosure.hidden = activeDays > COMPACT_MAX_DAYS;
+    disclosure.setAttribute('aria-expanded', 'true'); disclosure.textContent = '收起足迹';
     for (let i = 0; i < n; i++) {
       const d = new Date(start); d.setDate(start.getDate() + i);
       const k = dayKey(d), rec = data[k], s = secondsOf(rec), future = d > today;
@@ -210,7 +250,7 @@ export function createFootprintCard(): HTMLElement {
       h('div', { class: 'fp-days' }, ...['', '一', '', '三', '', '五', ''].map((x) => h('span', {}, x))),
       h('div', { class: 'fp-cells' }, ...cells),
     );
-    const segBtn = (v: 'year' | 'month', label: string) => h('button', { type: 'button', class: 'fp-seg-b', 'aria-pressed': String(view === v), onclick: () => { if (view === v) return; view = v; try { localStorage.setItem(VIEW_KEY, v); } catch { /* ignore */ } paint(activity); } }, label);
+    const segBtn = (v: 'year' | 'month', label: string) => h('button', { type: 'button', class: 'fp-seg-b', 'aria-pressed': String(view === v), onclick: () => { if (view === v) return; view = v; explicitView = true; try { localStorage.setItem(VIEW_KEY, v); } catch { /* ignore */ } paint(activity); } }, label);
     const seg = h('div', { class: 'fp-seg', role: 'group', 'aria-label': '视图' }, segBtn('year', '年'), segBtn('month', '月'));
     el.dataset.view = view;
     el.replaceChildren(
@@ -224,7 +264,7 @@ export function createFootprintCard(): HTMLElement {
         stat(fmt(secondsOf(t)), `${pLabel}时长`),
         stat(fmt(total), '近一年累计'),
         stat(`${streak} 天`, `当前连续 · 最长 ${best} 天`))),
-      h('div', { class: 'fp-main' }, view === 'year' ? graph : monthView(data, today), h('div', { class: 'fp-foot', style: 'flex-wrap:wrap;gap:8px' }, h('span', { class: 'fp-status', role: 'status', 'aria-live': 'polite', style: 'flex:1 1 180px;min-width:0;white-space:normal;overflow-wrap:anywhere' }, note), retry, legend)),
+      h('div', { class: 'fp-main' }, view === 'year' ? graph : monthView(data, today), h('div', { class: 'fp-foot', style: 'flex-wrap:wrap;gap:8px' }, h('span', { class: 'fp-status', role: 'status', 'aria-live': 'polite', style: 'flex:1 1 180px;min-width:0;white-space:normal;overflow-wrap:anywhere' }, note), retry, legend, disclosure)),
       tip,
     );
     const fit = () => {
@@ -320,7 +360,8 @@ export function createFootprintCard(): HTMLElement {
     if (refreshFrame) cancelAnimationFrame(refreshFrame);
     chrome.storage.onChanged.removeListener(changed);
   }, { signal: lifetime.signal });
-  paint(activity);
+  // A failed first read is not an empty history. Preserve the status and recovery action.
+  el.replaceChildren(h('span', { class: 'fp-status', role: 'status' }, note), retry);
   queueMicrotask(() => { void refresh().then(() => runSync()); });
   return el;
 }

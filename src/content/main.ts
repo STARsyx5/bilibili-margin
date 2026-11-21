@@ -418,7 +418,11 @@ function applyFont(s: Settings): void {
   // 视频 CDN 节点：页面主环境的 cdn.js 同步读 localStorage（v0.47.2）
   try { if (s.enabled && s.cdn) localStorage.setItem('margin:cdn', s.cdn); else localStorage.removeItem('margin:cdn'); } catch { /* 隐私模式 */ }
   set('--margin-zoom', on && s.zoom !== 100 ? String(s.zoom / 100) : null);
-  set('--margin-rk', on && s.radius !== 100 ? String(s.radius / 100) : null);
+  const radiusScale = on && s.radius !== 100 ? String(s.radius / 100) : '';
+  if (de.style.getPropertyValue('--margin-rk') !== radiusScale) {
+    set('--margin-rk', radiusScale);
+    document.dispatchEvent(new Event('margin:radius'));
+  }
   set('--margin-player-rk', on && !s.playerCorners ? '0' : null);
   set('--margin-cfs', on && s.commentSize !== 14 ? `${s.commentSize}px` : null);
 }

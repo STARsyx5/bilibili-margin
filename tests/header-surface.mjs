@@ -108,6 +108,14 @@ try {
     const b = [...nav.querySelectorAll('.et-btn')].find(el => el.querySelector('span').textContent === '分区');
     return b.style.order === '2' && Math.abs(nav.querySelector('.et-thumb').getBoundingClientRect().x-b.getBoundingClientRect().x)<1;
   },null,{timeout:3000});
+  // Follow the filter actually painted by the theme track, not a fallback in <defs>.
+  const track = page.locator('#margin-root .ts-c[style*="url("]');
+  const filterId = await track.evaluate(el => el.style.backdropFilter.match(/#([\w-]+)/)[1]);
+  const imageSelector = `#margin-root #${filterId} feImage`;
+  const map = page.locator(imageSelector), roundUrl = await map.getAttribute('href');
+  assert.match(roundUrl, /^blob:/);
+  const box = await track.boundingBox();
+  let previousUrl = roundUrl;
   for (const radius of [0,50,100,150]) {
     await sw.evaluate(async radius => {
       const key = 'margin:settings';
@@ -120,7 +128,21 @@ try {
       return parseFloat(getComputedStyle(thumb).borderRadius) === expected &&
         parseFloat(getComputedStyle(thumb.querySelector('.ts-edge'),'::after').borderRadius) === expected;
     }, radius);
+    const { width, height } = await track.boundingBox();
+    assert.deepEqual([width, height], [box.width, box.height], 'radius test must not resize the glass');
+    if (radius === 0 || radius === 50) {
+      await page.locator(`${imageSelector}:not([href="${previousUrl}"])`).waitFor({ state: 'attached', timeout: 5000 });
+      previousUrl = await map.getAttribute('href');
+      const alpha = await map.evaluate(async node => {
+        const img = new Image(); img.src = node.getAttribute('href'); await img.decode();
+        const ctx = document.createElement('canvas').getContext('2d'); ctx.drawImage(img, 0, 0);
+        return ctx.getImageData(0, 0, 1, 1).data[3];
+      });
+      assert.equal(alpha, radius === 0 ? 255 : 0, `lens corner at radius setting ${radius}`);
+      if (radius === 50) assert.equal(previousUrl, roundUrl, 'equivalent clamped radii must reuse the original map');
+    }
   }
+  console.log('PASS fixed-size liquid lens: square and round map pixels; clamped radius reuses original URL');
   await sw.evaluate(async () => {
     const key = 'margin:settings', old = (await chrome.storage.local.get(key))[key];
     await chrome.storage.local.set({[key]:{...old,headLabels:true}});

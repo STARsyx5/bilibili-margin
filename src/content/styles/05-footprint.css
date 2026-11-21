@@ -37,6 +37,21 @@
 .fp-tip { position: absolute; z-index: 99; pointer-events: none; padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.5; white-space: nowrap; background: var(--ink); color: var(--canvas); box-shadow: var(--sh-md); }
 .fp-tip[hidden] { display: none; }
 
+/* The first few days fit on a strip; no empty yearly grid or additional backdrop filter. */
+.dash > .fp-card[data-view="compact"] { display: flex; flex-wrap: wrap; align-self: start; align-items: center; justify-content: space-between; gap: 12px 24px; padding: 16px 24px; }
+.fp-brief-copy .eyebrow { margin: 0 0 4px; }
+.fp-brief-title { margin: 0; color: var(--ink); font: 500 20px/1.4 var(--serif); }
+.fp-brief-actions { display: flex; align-items: center; gap: 20px; }
+.fp-week-wrap { display: grid; gap: 5px; color: var(--muted); font: 12px/1.3 var(--sans); }
+.fp-week { display: flex; gap: 4px; }
+.fp-week .fp-cell { width: 10px; height: 10px; border-radius: 2px; }
+.fp-week .fp-cell[data-l="1"] { background: color-mix(in srgb, var(--accent-text) 70%, var(--surface)); }
+.fp-week .fp-cell:last-child { outline: 1px solid var(--muted); outline-offset: 1px; }
+.fp-disclosure { flex: none; min-height: 32px; border: 1px solid var(--line); border-radius: 999px; padding: 0 12px; font: 500 12px/1.3 var(--sans); color: var(--ink); }
+.fp-disclosure:hover { background: var(--chip); }
+.fp-brief-status { display: none; }
+.fp-card[data-sync-state="read-error"] .fp-brief-status { display: block; flex-basis: 100%; font-size: 12px; color: var(--muted); }
+
 /* 21st「Glass Calendar」：年 / 月分段切换 + 月视图日期条 */
 .fp-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .fp-card .fp-top .eyebrow { margin-bottom: 0; }
