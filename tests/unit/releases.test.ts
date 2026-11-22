@@ -26,9 +26,63 @@ describe('正式版本检查', () => {
     vi.mocked(optionalFetch).mockResolvedValue(new Response(JSON.stringify(value)));
     await expect(checkRelease(true)).rejects.toThrow('正式版信息'); expect(saved).not.toHaveBeenCalled();
   });
-  it('失败不覆盖旧缓存，不自动重试或绕过隐私选择', async () => {
-    vi.mocked(optionalFetch).mockRejectedValue(new Error('可选服务已关闭'));
-    await expect(checkRelease(true)).rejects.toThrow('可选服务已关闭');
+  it('失败不覆盖旧缓存', async () => {
+    vi.mocked(optionalFetch).mockRejectedValue(new Error('网络错误'));
+    await expect(checkRelease(true)).rejects.toThrow('网络错误');
+    expect(saved).not.toHaveBeenCalled();
+  });
+  it('外部辅助服务被关闭时不走发布页回退，也不发第二次请求', async () => {
+    const blocked = new Error('可选外部服务已关闭'); blocked.name = 'PrivacyBlocked';
+    vi.mocked(optionalFetch).mockRejectedValue(blocked);
+    await expect(checkRelease(true)).rejects.toThrow('可选外部服务已关闭');
     expect(optionalFetch).toHaveBeenCalledTimes(1); expect(saved).not.toHaveBeenCalled();
+  });
+});
+
+/** 造一个带最终地址的响应：回退通道靠 response.url 取版本号 */
+function redirectTo(url: string, status = 200): Response {
+  const response = new Response('{}', { status });
+  Object.defineProperty(response, 'url', { value: url });
+  return response;
+}
+
+describe('API 限流时改走发布页', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.stubGlobal('chrome', { storage: { local: { get: read, set: saved } } }); read.mockResolvedValue({});
+  });
+  it('API 报 403 时改用发布页跳转拿版本号，不占 API 配额', async () => {
+    vi.mocked(optionalFetch).mockImplementation(async (service: string) => {
+      if (service === 'update') return new Response('rate limited', { status: 403 });
+      return redirectTo('https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.75');
+    });
+    const info = await checkRelease(true);
+    expect(info.tag).toBe('0.60.75');
+    expect(info.url).toBe('https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.75');
+    expect(saved).toHaveBeenCalledTimes(1);
+  });
+  it('发布页也失败时报原始的 API 错误，并且不缓存', async () => {
+    vi.mocked(optionalFetch).mockImplementation(async (service: string) => {
+      if (service === 'update') return new Response('rate limited', { status: 403 });
+      throw new Error('发布页也打不开');
+    });
+    await expect(checkRelease(true)).rejects.toThrow('HTTP 403');
+    expect(optionalFetch).toHaveBeenCalledTimes(2); expect(saved).not.toHaveBeenCalled();
+  });
+  it('发布页跳到非版本地址时不认这个结果，也不缓存', async () => {
+    vi.mocked(optionalFetch).mockImplementation(async (service: string) => {
+      if (service === 'update') return new Response('rate limited', { status: 403 });
+      return redirectTo('https://github.com/jiuyang5354/bilibili-margin/releases');
+    });
+    await expect(checkRelease(true)).rejects.toThrow('HTTP 403');
+    expect(saved).not.toHaveBeenCalled();
+  });
+  it('发布页返回错误状态时不认这个结果，也不缓存', async () => {
+    vi.mocked(optionalFetch).mockImplementation(async (service: string) => {
+      if (service === 'update') return new Response('rate limited', { status: 403 });
+      return redirectTo('https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.75', 500);
+    });
+    await expect(checkRelease(true)).rejects.toThrow('HTTP 403');
+    expect(saved).not.toHaveBeenCalled();
   });
 });

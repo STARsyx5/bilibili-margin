@@ -6,6 +6,19 @@ New entries are grouped under Added, Changed, and Fixed, following [Keep a Chang
 
 ## Unreleased
 
+## [v0.6.90](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.90) · 2026-11-22 · A fallback channel for the update check
+
+Display version 0.6.90, browser update version 0.60.90.
+
+### Fixed
+
+- "Check for updates" no longer gives up when the GitHub API hits its unauthenticated rate limit. Unauthenticated requests are capped at 60 per IP per hour, so proxy egress hits that ceiling (403) easily and the popup prompt plus the settings check stop working together. The lookup now falls back to the official release page: it redirects to the tag page of the latest stable release, and the version is read from that final address — no API quota involved.
+- With optional external services turned off, the fallback channel is not attempted and no extra request is sent.
+
+### Changed
+
+- The fallback channel only accepts the release page under `github.com/jiuyang5354/bilibili-margin`, and a redirect is only followed to GitHub itself.
+
 ## [v0.6.89](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.89) · 2026-11-22 · TV channel and control alignment
 
 Display version 0.6.89, browser update version 0.60.89.
