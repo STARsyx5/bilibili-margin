@@ -33,7 +33,8 @@ try {
   await page.goto(url, { waitUntil: 'domcontentloaded' });
   const shell = page.locator('.search-input-wrap:visible').first(), input = shell.locator('.search-input-el');
   await input.waitFor();
-  await page.waitForFunction(() => ['.search-input-wrap', '#margin-watch-top'].every(sel => document.querySelector(sel)) &&
+  await page.waitForFunction(() => document.documentElement.matches('.margin-search[data-margin-theme="dark"][data-margin-glass="liquid"]') &&
+    ['.search-input-wrap[data-material="lens"]', '#margin-watch-top'].every(sel => document.querySelector(sel)) &&
     getComputedStyle(document.querySelector('.search-input-wrap')).backdropFilter.includes('url('));
   const paint = () => shell.evaluate(el => {
     const s = getComputedStyle(el), r = el.getBoundingClientRect(), id = /#([\w-]+)/.exec(s.backdropFilter)?.[1];
@@ -46,6 +47,8 @@ try {
     await page.screenshot({ path: join(out, filename), clip: { x: r.x-10, y: r.y-8, width: r.width+20, height: r.height+16 } });
   };
   const settled = () => shell.evaluate(el => Promise.all(el.getAnimations().map(a => a.finished.catch(() => {}))));
+  // Attaching the lens starts the native border-color transition; sample its final paint, not an in-between frame.
+  await settled();
   const idle = results.idle = await paint();
   await crop('dark-idle.png');
   assert.equal(idle.border, 'rgba(0, 0, 0, 0)', 'native search input still has a light border around its whole perimeter');
@@ -64,6 +67,10 @@ try {
   console.log(`PASS ${live ? 'live anonymous' : 'offline'} native search: dark directional shell, unchanged optics and native input focus`);
 
   await input.evaluate(el => el.blur());
+  await settled();
+  const blurred = results.blurred = await paint();
+  assert.equal(blurred.border, idle.border, 'blur must restore the completely transparent idle border');
+  assert.equal(blurred.shadow, idle.shadow, 'blur must restore the directional idle rim');
   const cdp = await ctx.newCDPSession(page);
   for (const [feature, value] of [['prefers-reduced-transparency','reduce'], ['prefers-contrast','more'], ['forced-colors','active']]) {
     await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: feature, value }] });

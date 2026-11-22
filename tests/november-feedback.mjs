@@ -78,8 +78,19 @@ try {
  await check('129-capsule-rim-across-reported-pages',async()=>{
   for(const url of ['https://www.bilibili.com/','https://www.bilibili.com/video/BV1mdxN68E7F/','https://message.bilibili.com/#/whisper','https://space.bilibili.com/2/video']){
    await page.goto(url);const capsule=page.locator('#margin-root .top .et,#margin-watch-top .top .et');await capsule.waitFor();
-   assert.equal(await capsule.evaluate(el=>getComputedStyle(el).outlineStyle),'solid');
-   assert.equal(await capsule.evaluate(el=>getComputedStyle(el.closest('.top')).backgroundColor),'rgba(0, 0, 0, 0)');
+   const paint=()=>capsule.evaluate(el=>{const s=getComputedStyle(el);return {outline:s.outlineStyle,rim:s.boxShadow,filter:s.backdropFilter,header:getComputedStyle(el.closest('.top')).backgroundColor};});
+   const idle=await paint();
+   assert.equal(idle.header,'rgba(0, 0, 0, 0)',url);
+   assert.equal(idle.outline,'none',`${url}: the idle dark capsule must not have a perimeter outline`);
+   assert.match(idle.rim,/0px 1px 0px 0px inset/,`${url}: missing upper rim`);
+   assert.match(idle.rim,/0px -1px 0px 0px inset/,`${url}: missing lower rim`);
+   try {
+    await page.emulateMedia({contrast:'more'});
+    const contrast=await paint();
+    assert.equal(contrast.outline,'solid',`${url}: high contrast must restore a solid boundary`);
+    assert.equal(contrast.filter,'none',url);
+    assert.equal(contrast.header,'rgba(0, 0, 0, 0)',url);
+   } finally {await page.emulateMedia({contrast:null});}
   }
  });
  assert.deepEqual(errors,[]);
