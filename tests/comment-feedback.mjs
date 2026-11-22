@@ -73,8 +73,11 @@ try {
     await page.keyboard.press('Escape'); await page.mouse.move(5, 850);
     await check(`drop-search-${name}`, async () => {
       const text = '评论中的关键词';
-      const form = page.locator(`${host} .top .search`);
-      await form.evaluate((element, text) => {
+      const header = page.locator(`${host} .top`);
+      const launcher = name === 'search' ? header.getByRole('button', { name: '打开命令面板', exact: true }) : header.locator('form.search');
+      if (name === 'search') assert.equal(await header.locator('form, input').count(), 0, 'the results header must not mount a second search field');
+      const tabs = context.pages().length, beforeDrop = page.url();
+      await launcher.evaluate((element, text) => {
         const data = new DataTransfer(); data.setData('text/plain', text);
         element.dispatchEvent(new DragEvent('dragover', { dataTransfer: data, bubbles: true, cancelable: true }));
         element.dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true }));
@@ -88,9 +91,9 @@ try {
         element.dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true }));
       }, replacement);
       assert.equal(await input.inputValue(), replacement);
-      const tabs = context.pages().length;
       await page.waitForTimeout(180);
-      assert.equal(context.pages().length, tabs);
+      assert.equal(context.pages().length, tabs, 'dropping text must not open a tab before Enter');
+      assert.equal(page.url(), beforeDrop, 'dropping text must not navigate away');
       const opened = context.waitForEvent('page'); await input.press('Enter');
       const result = await opened;
       await result.waitForLoadState('domcontentloaded');

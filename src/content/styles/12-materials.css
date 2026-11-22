@@ -8,7 +8,7 @@
 .app[data-theme="dark"] .top :where([data-material]) { box-shadow: inset 0 1px 1px #ffffff42, inset 0 -1px 1px #0005, 0 3px 12px #0003; }
 /* Light catches the upper lip, not the whole capsule. The cool lower seam stays
    between a white keyline and a black cutout; neither edge changes the lens. */
-.app[data-theme="dark"] .top :where(.search,.et) {
+.app[data-theme="dark"] .top :where(.search,.et,.ts-c) {
   outline: none;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / .34), inset 0 -1px 0 rgb(120 137 151 / .20), 0 3px 8px -4px rgb(5 9 19 / .4);
 }
@@ -23,7 +23,7 @@
    会白字白底，选哔哩蓝/粉时图标和文字都看不见（GitHub #176） */
 .app[data-glass="flat"] .top .upload[data-material] { background: var(--margin-primary, var(--surface)); color: var(--margin-primary-fg, var(--nav-ink)); backdrop-filter: none !important; }
 @media (prefers-contrast: more), (forced-colors: active) {
-  .app .top :is(.search,.et) { background: var(--surface); backdrop-filter: none !important; box-shadow: none; outline: 1px solid currentColor; }
+  .app .top :is(.search,.et,.ts-c) { background: var(--surface); backdrop-filter: none !important; box-shadow: none; outline: 1px solid currentColor; }
   .top .et-btn:is(:focus-visible,:hover,[data-selected]) { outline: 2px solid currentColor; outline-offset: -2px; }
 }
 @media(prefers-reduced-transparency:reduce) {

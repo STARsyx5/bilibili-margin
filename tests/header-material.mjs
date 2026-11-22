@@ -171,11 +171,11 @@ try {
     }
     console.log(`PASS ${theme}: shortcuts, rotating hint and keycap meet 4.5:1 over paper, charcoal and wallpaper`);
   }
-  const shellState = () => top.evaluate(header => ['.search','.et','.et-thumb'].map(sel => {
+  const shellState = (selectors = ['.search','.et','.et-thumb']) => top.evaluate((header, selectors) => selectors.map(sel => {
     const el = header.querySelector(sel), s = getComputedStyle(el);
     return { sel, radius: parseFloat(s.borderTopLeftRadius), filter: s.backdropFilter, background: s.backgroundColor,
       outline: s.outlineStyle, size: [el.offsetWidth,el.offsetHeight] };
-  }));
+  }), selectors);
   let size;
   const fills = { light: ['rgb(255, 255, 255)','rgba(250, 250, 248, 0.8)'], dark: ['rgb(26, 26, 28)','rgba(22, 25, 31, 0.72)'] };
   for (const theme of ['light','dark']) for (const glass of ['flat','soft','liquid']) for (const radius of [0,100]) {
@@ -202,10 +202,10 @@ try {
   for (const [feature,value] of [['prefers-reduced-transparency','reduce'], ['prefers-contrast','more'], ['forced-colors','active']]) {
     await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: feature, value }] });
     assert(await page.evaluate(q => matchMedia(q).matches, `(${feature}:${value})`));
-    for (const s of (await shellState()).slice(0,2)) {
-      assert.equal(s.filter, 'none', `${feature}: no optics behind header text`);
-      assert.match(s.background, /^rgb\(/, `${feature}: opaque shell`);
-      if (feature !== 'prefers-reduced-transparency') assert.notEqual(s.outline, 'none', `${feature}: visible capsule boundary`);
+    for (const s of await shellState(['.search','.et','.ts-c'])) {
+      assert.equal(s.filter, 'none', `${feature}: ${s.sel} must not sample the backdrop`);
+      assert.match(s.background, /^rgb\(/, `${feature}: opaque ${s.sel} shell`);
+      if (feature !== 'prefers-reduced-transparency') assert.notEqual(s.outline, 'none', `${feature}: visible ${s.sel} boundary`);
     }
     console.log(`PASS header ${feature}`);
   }
