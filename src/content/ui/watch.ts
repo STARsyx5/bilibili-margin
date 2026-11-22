@@ -352,6 +352,29 @@ export class WatchSkin {
     };
     // v0.49 无极倍速（B 站评论建议）：X 减 0.1×、C 加 0.1×（0.1–16×），Z 在当前倍速和 1× 之间来回切
     let lastRate = 1;
+    const videoKey = () => location.pathname + '?p=' + (new URLSearchParams(location.search).get('p') || '1');
+    let shortcut: { video: HTMLVideoElement; key: string; nativeDefault: number; rate: number } | undefined;
+    const releaseShortcut = () => {
+      if (!shortcut) return;
+      const { video, nativeDefault, rate } = shortcut;
+      video.removeEventListener('ratechange', checkShortcut);
+      video.removeEventListener('loadstart', checkShortcut);
+      if (video.defaultPlaybackRate === rate) video.defaultPlaybackRate = nativeDefault;
+      shortcut = undefined;
+    };
+    const checkShortcut = () => {
+      if (!shortcut) return;
+      const { video, rate, key } = shortcut;
+      if (key !== videoKey() || !this.settings.speedKeys) {
+        const inherited = video.playbackRate === rate && video.defaultPlaybackRate === rate;
+        releaseShortcut();
+        if (inherited) video.playbackRate = video.defaultPlaybackRate;
+        lastRate = 1;
+      } else if (video.playbackRate !== rate || video.defaultPlaybackRate !== rate) {
+        // 原生播放器已选择倍速，后续加载交回原站。
+        releaseShortcut();
+      }
+    };
     document.addEventListener('keydown', (e) => {
       if (!this.settings.speedKeys || e.ctrlKey || e.metaKey || e.altKey || e.repeat && e.key.toLowerCase() === 'z') return;
       const k = e.key.toLowerCase();
@@ -360,13 +383,19 @@ export class WatchSkin {
       if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
       const v = document.querySelector<HTMLVideoElement>('.bpx-player-video-wrap video, .bilibili-player-video video, video');
       if (!v) return;
+      checkShortcut();
+      if (shortcut && shortcut.video !== v) { releaseShortcut(); lastRate = 1; }
       e.preventDefault(); e.stopPropagation();
       const cur = Math.round(v.playbackRate * 10) / 10;
       let n: number;
       if (k === 'z') { if (cur === 1) n = lastRate === 1 ? 1 : lastRate; else { lastRate = cur; n = 1; } }
       else n = Math.min(16, Math.max(0.1, Math.round((cur + (k === 'c' ? 0.1 : -0.1)) * 10) / 10));
       if (k !== 'z' && n !== 1) lastRate = n;
+      shortcut = { video: v, key: videoKey(), nativeDefault: shortcut?.nativeDefault ?? v.defaultPlaybackRate, rate: n };
+      v.defaultPlaybackRate = n;
       v.playbackRate = n;
+      v.addEventListener('ratechange', checkShortcut);
+      v.addEventListener('loadstart', checkShortcut);
       volTip(`${n.toFixed(1)}×`);
     }, true);
     this.screenSync = () => sync(true);

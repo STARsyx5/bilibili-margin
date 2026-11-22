@@ -48,6 +48,49 @@ try {
       await page.close();
     }
   };
+  await check('225-speed-reload', async page => {
+    await page.goto('https://www.bilibili.com/video/BV1mdxN68E7F/');
+    await page.locator('#margin-watch-top .top').waitFor();
+    const video = page.locator('.bpx-player-video-wrap video').first();
+    const rate = () => video.evaluate(v => v.playbackRate);
+    await video.evaluate(v => new Promise((resolve, reject) => {
+      v.addEventListener('loadedmetadata', () => resolve(), { once: true });
+      v.addEventListener('error', () => reject(Error('fixture media failed to load')), { once: true });
+      v.src = 'data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQIAAAAAAA==';
+    }));
+    await page.keyboard.press('c');
+    assert.equal(await rate(), 1.1);
+    await video.evaluate(v => new Promise(resolve => {
+      v.addEventListener('loadedmetadata', () => resolve(), { once: true });
+      v.load();
+    }));
+    assert.equal(await rate(), 1.1, 'same media element lost the shortcut rate on load');
+    await page.keyboard.press('z');
+    await video.evaluate(v => v.load());
+    assert.equal(await rate(), 1);
+    await page.keyboard.press('z');
+    assert.equal(await rate(), 1.1);
+    await video.evaluate(v => new Promise(resolve => {
+      v.addEventListener('ratechange', resolve, { once: true });
+      v.playbackRate = 1;
+    }));
+    await video.evaluate(v => v.load());
+    assert.equal(await rate(), 1, 'native speed selection must take precedence');
+    await page.keyboard.press('x');
+    assert.equal(await rate(), 0.9);
+    await video.evaluate(v => new Promise(resolve => {
+      history.replaceState(null, '', '?p=2');
+      v.addEventListener('loadstart', () => resolve(), { once: true });
+      v.load();
+    }));
+    assert.equal(await rate(), 1, 'reusing the element on another part must release the shortcut');
+    await page.keyboard.press('c');
+    await video.evaluate(v => v.replaceWith(document.createElement('video')));
+    assert.equal(await rate(), 1, 'new player keeps its native rate');
+    await page.reload();
+    await page.locator('#margin-watch-top .top').waitFor();
+    assert.equal(await rate(), 1, 'reload keeps the native rate');
+  });
   for (const mode of ['web', 'legacy', 'native']) await check(`76-live-${mode}`, async page => {
     await page.goto('https://live.bilibili.com/12345');
     const top = page.locator('#margin-watch-top');
