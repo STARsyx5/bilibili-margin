@@ -566,8 +566,9 @@ for (const theme of THEMES) {
           p.frames++;
         }, 16);
       });
-      // 使用浏览器计算的内容四边形命中位置，避免 3D 外接矩形中心与实际链接错位。
-      await link.hover({ force: true });
+      // 从同一卡面上的非交互标签移入链接，避免从头像一步跳到 3D 翻面容器。
+      await page.locator('#margin-root .idcl-back .idcl-connect > span').hover();
+      await link.hover();
       await sleep(500);
       const state = await page.evaluate(() => { clearInterval(window.marginLinkTimer); return window.marginLinkProbe; });
       const miss = [];
